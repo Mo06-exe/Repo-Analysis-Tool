@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS coauthors (
 
 CREATE INDEX IF NOT EXISTS idx_commits_repo_ts    ON commits(repo_id, ts);
 CREATE INDEX IF NOT EXISTS idx_commits_repo_hash  ON commits(repo_id, hash);
+CREATE INDEX IF NOT EXISTS idx_commits_hash       ON commits(hash);
 CREATE INDEX IF NOT EXISTS idx_commits_identity   ON commits(identity_id);
 CREATE INDEX IF NOT EXISTS idx_fc_commit          ON file_changes(commit_id);
 CREATE INDEX IF NOT EXISTS idx_fc_repo_path       ON file_changes(repo_id, path);

@@ -9,7 +9,8 @@ aggregate" — so all filters compile into one WHERE fragment over the aliases
     path       c touches path (or dir under it) — either via EXISTS on
                file_changes, or directly on a joined fc.path expression
     from/to    c.ts range (unix seconds)
-    commits    c.hash prefix whitelist (json_each), skippable for browsing
+    commits    c.hash prefix whitelist (per-prefix index range seeks),
+               skippable for browsing
 
 Path filters are written as `= ? OR LIKE ? || '/%'`, which with
 case_sensitive_like=ON rides the (repo_id, path) index.
@@ -17,7 +18,6 @@ case_sensitive_like=ON rides the (repo_id, path) index.
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 
@@ -102,6 +102,25 @@ def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+_HEX_DIGITS = set("0123456789abcdef")
+
+
+def _hash_prefixes(commits: list[str]) -> list[str]:
+    """De-duplicated lowercase hex prefixes, order preserved.
+
+    Anything non-hex can never match a Git hash and is dropped — which also
+    means no LIKE escaping is needed, and without an ESCAPE clause SQLite can
+    rewrite each `hash LIKE 'p%'` into an index range scan (ESCAPE would
+    disable that optimization).
+    """
+    seen: dict[str, None] = {}
+    for raw in commits:
+        prefix = raw.strip().lower()
+        if prefix and all(ch in _HEX_DIGITS for ch in prefix):
+            seen[prefix] = None
+    return list(seen)
+
+
 def commit_where(f: Filters, path_expr: str | None = None) -> tuple[str, list]:
     """WHERE over `c` (commits) and `i` (identities).
 
@@ -123,8 +142,13 @@ def commit_where(f: Filters, path_expr: str | None = None) -> tuple[str, list]:
         conds.append(f"i.canonical_id IN ({_placeholders(len(f.authors))})")
         params += f.authors
     if f.commits and not f.ignore_commits:
-        conds.append("EXISTS (SELECT 1 FROM json_each(?) j WHERE c.hash LIKE j.value || '%')")
-        params.append(json.dumps(f.commits))
+        prefixes = _hash_prefixes(f.commits)
+        if prefixes:
+            ors = " OR ".join(["x.hash LIKE ?"] * len(prefixes))
+            conds.append(f"c.id IN (SELECT x.id FROM commits x WHERE {ors})")
+            params += [p + "%" for p in prefixes]
+        else:
+            conds.append("0=1")
     if f.path:
         if path_expr:
             conds.append(f"({path_expr} = ? OR {path_expr} LIKE ? ESCAPE '\\')")
