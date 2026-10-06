@@ -163,9 +163,15 @@ export function StrataChart({
             />
           )}
 
-          {/* x labels */}
-          {labels.map((label, i) =>
-            i % labelStride === 0 || i === n - 1 ? (
+          {/* x labels — strided; the final label is dropped when it would
+              sit closer than ~48px to the last strided one */}
+          {labels.map((label, i) => {
+            const prevShown = Math.floor((n - 1) / labelStride) * labelStride
+            const show =
+              i === n - 1
+                ? prevShown === n - 1 || (n - 1 - prevShown) * stepX >= 48
+                : i % labelStride === 0
+            return show ? (
               <text
                 key={i}
                 x={xFor(i)}
@@ -177,8 +183,8 @@ export function StrataChart({
               >
                 {label}
               </text>
-            ) : null,
-          )}
+            ) : null
+          })}
 
           {/* invisible per-bucket hit areas — also catch synthetic hovers */}
           {labels.map((_, i) => (
