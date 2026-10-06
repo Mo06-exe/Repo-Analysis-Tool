@@ -103,22 +103,84 @@ from=2024-01-01&to=2024-06-30     commit-date window (inclusive)
 commits=ab12cd,ef34ab             explicit commit whitelist (hash prefixes)
 ```
 
-## Pushing to GitHub
+## Running locally
 
-This tree was built locally and is push-ready; it contains no credentials
-(`./data`, `.venv` and build output are git-ignored).
+A step-by-step guide. Both launchers are idempotent — they create the
+virtualenv, install missing dependencies and (for `run.sh`) rebuild the
+frontend only when sources changed — so the first run does the heavy lifting
+and later starts are near-instant.
+
+### 1. Set up the Python environment
+
+Requires Python 3.11+ (see [Requirements](#requirements)). From the project
+root:
 
 ```bash
-git remote add origin git@github.com:<you>/stratum.git
-git push -u origin main
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt
 ```
 
-Or with the GitHub CLI — creates the public repository and pushes in one step:
+Both launchers run these two commands automatically when `.venv` is missing
+or FastAPI/uvicorn are not yet installed. To use a specific interpreter, set
+`PYTHON` (e.g. `PYTHON=/usr/bin/python3.11 ./run.sh`).
+
+### 2. Install frontend dependencies
+
+Requires Node 18+ — build-time only; the built UI is served by the backend, so
+Node is not needed at runtime.
 
 ```bash
-gh auth login
-gh repo create stratum --public --source=. --remote=origin --push
+npm --prefix frontend install
 ```
+
+`dev.sh` and `run.sh` run this automatically whenever `frontend/node_modules`
+is missing.
+
+### 3. Launch the server
+
+#### Development mode — `./dev.sh`
+
+```bash
+./dev.sh
+```
+
+Starts two processes side by side, and stops both on `Ctrl-C`:
+
+| Process | URL | Behavior |
+|---|---|---|
+| Backend (uvicorn) | http://127.0.0.1:8000 | `--reload`: restarts on edits under `backend/` |
+| Frontend (vite) | http://localhost:5173 | hot-reloads `frontend/src`; proxies `/api` to the backend |
+
+Open **http://localhost:5173** in a browser. Use this mode while developing:
+UI edits appear instantly, and backend edits restart the API on their own.
+
+#### Production mode — `./run.sh`
+
+```bash
+./run.sh
+```
+
+Rebuilds `frontend/dist` when it is missing or older than the sources, then
+serves the static dashboard and the JSON API from a single uvicorn process.
+Open **http://localhost:8000**. The port is configurable:
+
+```bash
+PORT=9000 ./run.sh        # serves on http://localhost:9000
+```
+
+### Launching by hand
+
+Prefer to run every step yourself? This is what the launchers do, explicitly:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
+npm --prefix frontend install && npm --prefix frontend run build
+.venv/bin/python -m uvicorn app.main:app --app-dir backend --port 8000
+```
+
+Then open http://localhost:8000. For a live-reload frontend against the same
+backend, skip the build step and start the vite dev server instead
+(`npm --prefix frontend run dev`), then visit http://localhost:5173.
 
 ## Layout
 
