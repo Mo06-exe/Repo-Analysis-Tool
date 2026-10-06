@@ -43,6 +43,21 @@ def _ext(path: str) -> str:
     return name[idx + 1 :].lower() if idx > 0 else ""
 
 
+def _path_levels(path: str) -> int:
+    """SQL function: how many parent directories a path has."""
+    return path.count("/")
+
+
+def _ancestor(path: str, level: int) -> str:
+    """SQL function: prefix up to the level-th slash — ('src/core/x.py', 1) -> 'src/'."""
+    pos = -1
+    for _ in range(level):
+        pos = path.find("/", pos + 1)
+        if pos == -1:
+            return path
+    return path[: pos + 1]
+
+
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False, isolation_level=None)
     conn.row_factory = sqlite3.Row
@@ -55,6 +70,8 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA temp_store=MEMORY")
     conn.create_function("dirname", 1, _dirname, deterministic=True)
     conn.create_function("ext", 1, _ext, deterministic=True)
+    conn.create_function("path_levels", 1, _path_levels, deterministic=True)
+    conn.create_function("ancestor", 2, _ancestor, deterministic=True)
     return conn
 
 
