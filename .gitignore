@@ -1,0 +1,15 @@
+# runtime data (analyzed repos, sqlite db)
+data/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# node
+node_modules/
+frontend/dist/
+
+# misc
+.DS_Store
+*.log
