@@ -44,6 +44,25 @@ Git author identity is messy; Stratum treats it as data.
 - The UI is a dense instrument panel, not a landing page: monospace figures,
   hairline borders, keyboard-free but fast, every number one hover from its source.
 
+## Performance
+
+Measured on a synthetic 100,000-commit repository (366 files, 48 authors,
+3.4 years, ~1.2M line additions; generated with `git fast-import`):
+
+| Operation | Result |
+|---|---|
+| Full ingest — mirror clone, two-pass parse, SQLite materialization | ~66 s (~1,500 commits/s) |
+| Overview / authors / directories queries | 25–300 ms |
+| Paged file table with server-side sort | ~250 ms |
+| Commit-whitelist filter (up to 2000 hashes) on any scope | 15–30 ms |
+| Single-file blame at HEAD | a few ms (LRU-cached) |
+
+The design behind those numbers: one streaming pass per concern feeding
+batched transactions; aggregates computed in SQL over the (repo_id, ts) and
+(repo_id, path) indexes; commit-hash prefixes resolved through per-prefix
+index range seeks instead of per-row matching; blame results cached per
+(repo, path).
+
 ## Requirements
 
 - **Python 3.11+** (runtime) and **Node 18+** (to build the UI — not needed at runtime)
